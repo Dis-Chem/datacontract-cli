@@ -282,9 +282,19 @@ def _databricks_credentials_provider(**config_kwargs):
     """
 
     def credentials_provider():
-        from databricks.sdk.core import Config
+        from databricks.sdk.core import Config, oauth_service_principal
 
-        return Config(**config_kwargs).authenticate
+        cfg = Config(**config_kwargs)
+        # databricks-sql-connector >= 4.3.0 added a token-federation layer that
+        # rejects a bare ``Config.authenticate`` header factory for an OAuth M2M
+        # service principal ("Token exchange failed, using external token" ->
+        # OpenSession HTTP 400 -> RequestError "Error during request to server").
+        # ``oauth_service_principal`` returns the header factory the connector
+        # expects for a service principal; keep ``.authenticate`` for the
+        # profile / unified-auth path.
+        if config_kwargs.get("client_id") and config_kwargs.get("client_secret"):
+            return oauth_service_principal(cfg)
+        return cfg.authenticate
 
     return credentials_provider
 
